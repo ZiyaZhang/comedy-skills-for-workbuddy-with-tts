@@ -9,13 +9,12 @@ description: "AI领笑员（脱口秀评审官）。当用户提供脱口秀稿�
 
 这个 skill 将 WorkBuddy 变成一场脱口秀评审现场。对用户提交的稿件，输出：
 
-1. **一张五维评分可视化卡片** — 在 `:::script` 容器内渲染（先给结论）。**优先**通过 `show_widget` 工具调用渲染；**当前会话未暴露 `show_widget` 工具时**，直接把 `widget_template.html` 渲染好的裸 HTML 片段内联进 `:::script` 容器（WorkBuddy 的 markdown 渲染器会保留 inline style）
+1. **一张五维评分可视化卡片** — 通过 `show_widget` 工具渲染（先给结论）
 2. **四位领笑员的互动点评** — 每人按各自人设给出 200–300 字的现场反应（再给详解）
-3. **4 段语音点评** — 通过 `synthesize_judges` MCP 合成，**在 macOS / Windows 上由 MCP server 自动用本机扬声器顺序播放**（学识派 → 老登 → 钝感美女 → 外星派）。**默认不渲染播放器卡片**——既然系统已经在外放，就不必再多一张多余的 audio widget。仅当用户明确要求"补一张播放器"或运行环境无法本机自动播放（如 Linux）时，才走可选的 Step 9 渲染播放器
 
 ## 多稿件约束（重要）
 
-**skill 本身只处理单份稿件。** 如果用户同时提供多份稿件，由 agent 逐份调度，每份走完整的 Step 1–9 流程，**严禁交叉输出**。
+**skill 本身只处理单份稿件。** 如果用户同时提供多份稿件，由 agent 逐份调度，每份走完整的 Step 1–7 流程，**严禁交叉输出**。
 
 ## 工作流程
 
@@ -62,16 +61,16 @@ description: "AI领笑员（脱口秀评审官）。当用户提供脱口秀稿�
 
 ### Step 7: 生成主体输出（评分卡 + 4 段点评）
 
-输出格式为 `:::script` 容器，**容器内**先放评分卡片，再嵌套四个 `:::judge` 容器。**严格按 `output_protocol.md` 第二、三、四节的语法**。这一步先**不**闭合 `:::script`——后面 Step 8 还要继续。
+输出格式为 `:::script` 容器，**容器内**先调用 `show_widget` 工具，再嵌套四个 `:::judge` 容器。**严格按 `output_protocol.md` 第二、三、四节的语法**。这一步先**不**闭合 `:::script`——后面 Step 8/9/10 还要继续。
 
-完整结构（默认流程）：
+完整结构（含 Step 8/9/10）：
 
 ```
 我已经为您完成了关于脱口秀稿件《{{稿件标题}}》的五维评分以及四位领笑员点评，以下是详细评价：
 
 :::script id=script-1 name="{{稿件标题}}" performer="{{选手名}}"
 
-[Step 7: 渲染五维评分卡片，参数见 7.1]
+[Step 7: 调用 show_widget 渲染五维评分卡片，参数见 7.1]
 
 :::judge persona=scholar name="学识派" voice=scholar-calm color=#3B82F6
 
@@ -97,9 +96,9 @@ description: "AI领笑员（脱口秀评审官）。当用户提供脱口秀稿�
 
 :::
 
-[Step 8: 调用 synthesize_judges 合成 4 段音频；MCP 在 macOS/Windows 上会自动用本机扬声器顺序播放]
+[Step 8: 调用 mcp__comedy-tts__synthesize_judges 合成 4 段音频]
 
-[Step 9（可选，默认跳过）: 仅当用户明确要播放器、或运行环境无本机自动播放时，才在此处发起第二次 show_widget 渲染播放器卡片]
+[Step 9: 再调用 show_widget 渲染播放器卡片（audio_widget_template.html）]
 
 :::
 ```
@@ -118,47 +117,26 @@ mcp__comedy-tts__synthesize_judges({
   ]
 })
 ```
+返回 `{ audios: [{ persona, url }, ...] }` —— 4 个 `http://localhost:9876/audio/<hash>.mp3`。
 
-返回 `{ audios: [...], playing: true/false, platform: "darwin"/... }`。
+### Step 9: 渲染播放器卡片（第二个 show_widget）
 
-**MCP server 在 macOS（afplay）和 Windows（PowerShell + WPF MediaPlayer）上会自动用本机扬声器顺序播放这 4 段音频**（学识派 → 老登 → 钝感美女 → 外星派），不需要任何前端控件。响应里的 `playing: true` 就表示已经在播了。
-
-**默认情况下：写完 Step 8 直接进 Step 10 闭合 `:::script`，不要再调一次 show_widget 去渲染播放器卡片。** 系统已经在外放，再叠一张可视化播放器只会是冗余视觉噪音。仅当 Step 9 被触发（见下）时才补播放器。
-
-### Step 9（可选，默认跳过）：渲染播放器卡片
-
-**默认完全跳过这一步**，直接进 Step 10 闭合 `:::script`。
-
-仅在以下两种情形下才在 `:::script` 容器内、Step 10 闭合之前发起第二次 `show_widget` 调用渲染播放器卡片：
-
-1. **用户明确要求**："最后追加一张播放器卡片" / "把播放器也补上" / "我要看到 audio 控件" 等
-2. **运行环境无本机自动播放**：`synthesize_judges` 返回 `playing: false`、或 `platform` 既不是 `darwin` 也不是 `win32`（典型如 Linux 容器、CI 环境）
-
-播放器卡片调用示意（仅在上述两种情形下使用）：
-
-```
-show_widget({
-  title: "AI 领笑员语音",
-  widget_code: "<根据 4 段 audio url 拼出的 audio 列表 HTML 片段>",
-  loading_messages: ["合成语音", "排队播放", "准备控件", "就绪"]
-})
-```
-
-`widget_code` 自由发挥即可——4 段 audio + 顺序播放按钮。这是**逃生通道**，不是默认路径。
+紧接着 Step 8，再发起一次 `show_widget`：
+- `title`: `四位领笑员朗读`
+- `widget_code`: 读 `references/audio_widget_template.html`，把 `{{SCHOLAR_URL}}` / `{{VETERAN_URL}}` / `{{BELLE_URL}}` / `{{ALIEN_URL}}` 替换成 Step 8 拿到的 url
+- `loading_messages`: `["调用豆包大模型语音合成", "学识派完成", "老登完成", "钝感美女完成", "外星派完成"]`
 
 ### Step 10: 关闭 `:::script`
 
-写完 Step 8（或可选的 Step 9）之后，顶格写一行 `:::` 闭合 `:::script` 容器。**之后什么都不写**。
+写完 Step 9 后顶格写一行 `:::`。**之后什么都不写**。
 
 **关键顺序要求**：
 
 - 第一行先输出总结句（`我已经为您完成了…` 那一行，**写在 `:::script` 之前**）
 - 紧接着输出 `:::script` 开标签（顶格、独占一行）
-- script 容器内：**先**渲染五维评分卡片（先给结论），**再**输出四个 `:::judge` 容器
+- script 容器内：**先**调用一次 show_widget（先给结论），**再**输出四个 `:::judge` 容器
 - 四个 `:::judge` 顺序固定：scholar → veteran → belle → alien
-- 四个 judge 全部写完后，调用一次 `synthesize_judges`（Step 8）
-- **默认不再调第二次 show_widget**（系统已在外放，播放器卡片是冗余）；仅在 Step 9 的两种触发情形下才补一张播放器卡片
-- 最后输出 `:::script` 的闭标签 `:::`
+- 四个 judge 全部写完后，输出 `:::script` 的闭标签 `:::`
 - **`:::script` 闭合之后绝对不再输出任何文字**（评分已经在卡片里给过了，不必重复总结、不写"以上"、不写任何过渡语）
 
 **容器语法硬规则**（违反会让前端解析失败）：
@@ -169,54 +147,31 @@ show_widget({
 - 属性值含中文或空格时**必须加双引号**（`name="A-普通却自信"`），纯英文/数字/hex 色值可以不加（`persona=scholar` / `color=#3B82F6`）
 - 每个 `:::judge` 容器的 `persona` / `voice` / `color` 三个属性的值**必须严格按 `output_protocol.md` 第 4.3 节的锁定值**，一个字符都不能错（前端就靠这些值调 TTS、渲染头像）
 
-### 7.1 五维评分卡片的两种渲染方式（硬性要求）
+### 7.1 五维卡片必须用 show_widget 工具调用（硬性要求）
 
-**首选**：在 `:::script` 开标签之后、第一个 `:::judge` 之前，发起一次 `show_widget` 工具调用，参数如下：
+**绝对禁止**：不要把卡片 HTML 直接写在消息文本里、不要放进代码块展示、不要写在 `:::script` 容器外面。
+
+**必须做的**：在 `:::script` 开标签之后、第一个 `:::judge` 之前，发起一次 `show_widget` 工具调用，参数如下：
 
 - `title`：固定为 `AI 评分`
 - `widget_code`：从 `references/widget_template.html` 读取原始模板，**替换里面所有的占位符**（`{{PERFORMER_NAME}}` / `{{PUNCH_SCORE}}` 等），得到的最终 HTML 片段
 - `loading_messages`：固定数组 `["生成评分卡片", "计算维度权重", "渲染进度条", "准备就绪"]`
 
-**兜底（当前会话工具列表里没有 `show_widget` / `visualize:show_widget` 时）**：必须执行以下三个动作，**一个不能少**：
-
-1. **读取**：用 read 工具读 `references/widget_template.html`，拿到模板字符串
-2. **替换**：把 12 个占位符（`{{SCRIPT_TITLE}}` / `{{PERFORMER_NAME}}` / `{{TAG_LINE}}` / 5 个 `{{*_SCORE}}` / 5 个 `{{*_COMMENT}}` / `{{TOTAL_SCORE}}` / `{{TOTAL_COMMENT}}`）逐个换成本次的实际值
-3. **输出**：把替换好的**整段裸 HTML 字符串**（约 6KB，从 `<div style="width:100%;...">` 开始到对应 `</div>` 结束）**直接写到回复正文里**，位置必须在 `:::script` 开标签之后、空一行、然后是 HTML、再空一行、然后才是第一个 `:::judge` 开标签
-
 **判断你是否做对了**：
 
-- ✅ 你的回复正文里出现了一段以 `<div style="width:100%;max-width:680px;...` 开头的长 HTML 字符串，且它在 `:::script` 容器内、第一个 `:::judge` 之前 → 对了
-- ❌ `:::script` 开标签之后**直接就是 `:::judge`**，没有任何 HTML 字符串 → **错了，必须返工**。这是最常见的错误：模型以为"分数已经写在 judge 文字里了"就跳过卡片——这是错误的，分数必须在卡片里独立可视化呈现
-- ❌ HTML 被包在三重反引号代码块里（`​`​`​`​`html<div>...</div>​`​`​`​`）→ 错了，会被渲染成代码块而不是组件，必须直接裸写
-- ❌ HTML 写在了 `:::script` 容器外面 → 错了，卡片会和稿件脱钩
-
-判断逻辑：
-
-```
-if (本次会话工具集包含 show_widget 或 visualize:show_widget):
-    走"首选"，发起工具调用
-else:
-    走"兜底"，read widget_template.html → 替换占位符 → 整段裸 HTML 写进 :::script
-```
-
-**不允许做的事**：
-
-- ❌ 跳过卡片渲染，直接进 4 段 judge（**最常见错误，必须杜绝**）
-- ❌ 把卡片 HTML 放进三重反引号代码块展示（会被当成代码而不是渲染）
-- ❌ 把卡片 HTML 写在 `:::script` 容器**外面**
-- ❌ 在工具可用时还坚持走兜底（白白浪费独立 iframe 沙箱）
-- ❌ 在工具不可用时反复尝试调用工具失败后才放弃（先看工具列表，没有就直接走兜底）
+- ✅ 你用了 show_widget 工具 → 宿主前端会以 iframe 卡片形态渲染
+- ❌ 你把 `<div style="...">` 这样的 HTML 直接写进消息正文 → 宿主前端会把 HTML 丢弃，用户什么都看不到；这是**错误输出**，必须返工
 
 ## 输出核心规则
 
 1. **`:::` 容器语法**：严格遵守 `output_protocol.md`；三个冒号顶格独占一行；属性值含中文必须加双引号；闭标签只写 `:::`；正文与开/闭标签之间各空一行
-2. **输出顺序严格固定**：① 总结句 → ② `:::script` 开标签 → ③ 评分卡（show_widget 工具调用 或 内联 HTML） → ④ 四个 `:::judge` 容器 → ⑤ synthesize_judges MCP 调用 → ⑥（可选）播放器卡片 show_widget → ⑦ `:::script` 闭标签
+2. **输出顺序严格固定**：① 总结句 → ② `:::script` 开标签 → ③ show_widget 工具调用 → ④ 四个 `:::judge` 容器 → ⑤ `:::script` 闭标签
 3. **四位人设顺序固定**：scholar → veteran → belle → alien（先专业切入 → 再阅历评判 → 再观众情绪 → 最后外部视角收尾）
 4. **每个 `:::judge` 的 persona/name/voice/color 四个属性必须严格匹配 `output_protocol.md` 第 4.3 节**：scholar 用 `voice=scholar-calm color=#3B82F6`、veteran 用 `voice=veteran-rough color=#B45309`、belle 用 `voice=belle-vivid color=#EC4899`、alien 用 `voice=alien-curious color=#10B981`。**前端要直接拿 voice 传给 TTS API，写错就播错音色**
 5. **打分客观独立**：五维分数不受人设影响，人设只影响点评语气
 6. **分数格式**：整数，5 为步长，范围 0–100；**总分必须等于五项之和**（不能算错）
 7. **不要用 90+**：除非稿件确实达到行业顶尖水平（scoring_guide.md 的参考案例）
-8. **评分卡片渲染**：评分卡片必须出现在 `:::script` 容器内、4 个 `:::judge` 之前。当本次会话工具列表里有 `show_widget` 或 `visualize:show_widget` 时，**优先**用工具调用；当工具不可用时，**直接把渲染好的 widget HTML 内联写到 `:::script` 容器内**（详见 7.1 节）。**播放器卡片默认不渲染**——MCP 已在 macOS/Windows 自动外放——仅在 Step 9 两种触发情形下才补
+8. **show_widget 必须通过工具调用**：禁止把卡片 HTML 作为消息文本输出；在 `:::script` 开标签之后、第一个 `:::judge` 之前发起**且只发起一次** `show_widget`
 9. **`:::script` 闭合之后绝对不输出任何文字**：不写"总分"、不写"以上"、不写任何过渡语；评分已经在卡片里展示过了
 10. **中文输出**：所有正文文本必须用中文；属性键名（`persona` / `voice` / `color` 等）保持英文小写
 
@@ -224,7 +179,7 @@ else:
 
 - [ ] 第一行是总结句（"我已经为您完成了…"），写在 `:::script` **之前**
 - [ ] `:::script` 开标签顶格、独占一行；含中文的属性值都加了双引号
-- [ ] **`:::script` 开标签和第一个 `:::judge` 之间，有一段以 `<div style="width:100%;max-width:680px;...` 开头的长 HTML 字符串**（兜底路径）**或**一次 show_widget 工具调用（首选路径）。**两者都没有 = 漏了卡片 = 必须返工**
+- [ ] 在 script 容器内**先**调用了一次（且仅一次）show_widget，**再**输出 4 个 judge
 - [ ] widget 总分 = 五项之和
 - [ ] 四个 `:::judge` 顺序：scholar → veteran → belle → alien
 - [ ] 每个 judge 的 voice 属性正确：`scholar-calm` / `veteran-rough` / `belle-vivid` / `alien-curious`
@@ -232,8 +187,6 @@ else:
 - [ ] 每个 `:::judge` 开标签下空一行再写正文，正文写完空一行再写 `:::` 闭标签
 - [ ] 闭标签只写 `:::`，没有写成 `:::judge` 或 `:::script`
 - [ ] 每位点评字数控制在 200–300 字
-- [ ] 4 个 `:::judge` 写完后，调用了一次 `synthesize_judges` MCP 合成 4 段语音
-- [ ] **默认没有调用第二次 show_widget**（播放器卡片是可选项，仅在用户明确要 / Linux 等无本机播放环境才补）
 - [ ] 最外层有 `:::script` 的 `:::` 闭标签
 - [ ] `:::script` 闭标签之后没有任何文字输出
 
@@ -242,4 +195,4 @@ else:
 - `references/output_protocol.md` — **`:::` 容器语法规范、属性字典、persona ↔ voice/color 锁定表（必读）**
 - `references/personas.md` — 四种领笑员人设的详细定义、语言风格和示例
 - `references/scoring_guide.md` — 五维评分的详细标准、分值区间含义、参考案例
-- `references/widget_template.html` — **五维卡片 HTML 模板（必读）**，用于 show_widget 调用或在 `:::script` 容器内裸 HTML 内联渲染
+- `references/widget_template.html` — **五维卡片 HTML 模板（必读）**，用于 show_widget 调用

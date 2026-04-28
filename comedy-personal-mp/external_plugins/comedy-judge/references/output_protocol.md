@@ -10,7 +10,7 @@
 
 ```
 :::script ...
-  [show_widget 工具调用 或 裸 HTML 内联 → 渲染五维评分卡片]
+  [调用 show_widget 工具 → 渲染五维评分卡片]
 
   :::judge persona=scholar ...
     [自由形式点评文字]
@@ -35,7 +35,7 @@
 | 层级 | 形式 | 职责 |
 |------|------|------|
 | `:::script` | GFM directive 容器 | 稿件级分隔，承载稿件元数据 |
-| 五维评分卡片 | `show_widget` 工具调用 或 裸 HTML 内联（详见 5.0） | 渲染五维评分（先给结论） |
+| `show_widget` 工具调用 | 工具调用 | 渲染五维评分卡片（先给结论） |
 | `:::judge` | GFM directive 容器 | 单个领笑员的互动点评，承载人设元数据（再给详解） |
 
 **输出顺序：先 widget，再 4 个 judge。**评分卡片是结论，领笑员点评是展开论证；先看结果再听理由，符合脱口秀比赛"先亮分后讲评"的现场节奏。
@@ -129,28 +129,19 @@ GFM container directive 的语法要求，违反将导致前端解析失败：
 
 ---
 
-## 五、五维评分卡片渲染
+## 五、五维评分卡片（show_widget 调用）
 
-### 5.0 ⚠️ 渲染方式（双轨制）
+### 5.0 ⚠️ 最重要的约束
 
-**五维评分卡片必须出现在 `:::script` 容器内、4 个 `:::judge` 之前。** 渲染方式按宿主能力分两种：
+**五维评分卡片必须通过发起 `show_widget` 工具调用来实现，不能以任何形式把 HTML 写进消息正文。**
 
-**首选：调用 `show_widget` 工具**（当本次会话工具列表里包含 `show_widget` / `visualize:show_widget` / `visualizer:show_widget` 时）
+- ✅ **正确**：调用 `show_widget` 工具（或 `visualize:show_widget` / `visualizer:show_widget`），传入 `title` / `widget_code` / `loading_messages` 三个参数
+- ❌ **错误**：把 `<div style="...">...</div>` 直接写在 `:::script` 容器内作为普通段落
+- ❌ **错误**：把卡片 HTML 放进三重反引号代码块展示
 
-- ✅ **正确**：发起一次工具调用，传入 `title` / `widget_code` / `loading_messages` 三个参数（详见 5.2）
-- ✅ 宿主前端会用独立 iframe 沙箱渲染卡片
+**为什么**：宿主前端（WorkBuddy desktop）的 Markdown 渲染器对消息正文里的裸 `<div style>` HTML 会直接丢弃或剥掉 style，用户看不到任何效果；只有通过 `show_widget` 工具调用，前端才会用独立的 iframe 沙箱把卡片正确渲染出来。
 
-**兜底：内联裸 HTML 片段**（当工具不可用时）
-
-- ✅ **正确**：把 `widget_template.html` 渲染好的最终 HTML 片段**直接写到 `:::script` 容器内、第一个 `:::judge` 之前**。WorkBuddy 的 `VisualizerShowWidgetRenderer` 会保留 inline style 渲染
-- 模板已经是为 WorkBuddy 内联渲染设计的：所有 style 都是 inline、色值全部硬编码、宽度 680px 自适应
-- 不要把它丢进三重反引号代码块（会被当成代码而不是渲染）
-- 不要写在 `:::script` 容器**外面**
-
-**两种禁止**：
-
-- ❌ 工具可用时还坚持走兜底（白白浪费独立沙箱）
-- ❌ 工具不可用时反复尝试调用工具失败后才放弃（先看工具列表，没有就直接走兜底）
+**如果你发现自己在生成 `<div ...>` 这样的字符串准备写进消息，请停下来，改成发起一次工具调用。**
 
 ### 5.1 调用时机
 
@@ -240,7 +231,7 @@ show_widget({
 
 **不在 skill 内部做批量循环**。多稿件由 agent 自动拆解，逐份调用 skill。每份稿件的 `:::script` 容器之间用**正常换行**隔开即可，不需要额外分隔符。
 
-唯一约束：每份稿件输出必须是**完整独立**的 `:::script` 容器（含 1 张评分卡片 + 4 个 judge），不要交叉混合。
+唯一约束：每份稿件输出必须是**完整独立**的 `:::script` 容器（含 1 个 show_widget + 4 个 judge），不要交叉混合。
 
 ---
 
@@ -253,9 +244,8 @@ show_widget({
 | `:::script` 前有空格 | 整个容器失效，退化为普通文本 | 三个冒号必须顶格 |
 | 属性值含中文未加引号 | 属性解析错乱 | `name="A-普通却自信"`，加双引号 |
 | 闭标签写成 `:::judge` | 容器不闭合 | 闭标签只写 `:::` |
-| 评分卡写在 script 容器外 | 卡片与稿件脱钩 | 必须在 script 内，所有 judge **之前** |
-| 评分卡写在 4 个 judge 之后 | 顺序倒置，违反"先结论后详解" | 必须在所有 judge 之前 |
-| 评分卡 HTML 包进三重反引号代码块 | 显示为代码而不是渲染 | 直接以裸 HTML 内联，或走 show_widget 工具 |
+| show_widget 写在 script 容器外 | 卡片与稿件脱钩 | 必须在 script 内，所有 judge **之前** |
+| show_widget 写在 4 个 judge 之后 | 顺序倒置，违反"先结论后详解" | 必须在所有 judge 之前 |
 | widget_code 带 `<html>` | 前端渲染失败 | 只给裸片段 |
 | 总分 ≠ 五项之和 | 数据自相矛盾 | 先算五项再填总分 |
 | persona id 用旧的 `hype`/`folk`/`roast` | 前端无法匹配头像色块 | 必须是 `scholar` / `veteran` / `belle` / `alien` |
@@ -265,10 +255,10 @@ show_widget({
 - [ ] 每个 `:::` 都顶格、独占一行
 - [ ] **所有 `:::judge` 开标签之后必须换行空一行，正文从下一行开始，绝不能在开标签同一行写正文**
 - [ ] 每个开标签有对应闭标签 `:::`
-- [ ] **评分卡（show_widget 工具调用 或 内联 HTML 二选一）在所有 `:::judge` 之前**（卡片先于评论）
+- [ ] **show_widget 调用在所有 `:::judge` 之前**（卡片先于评论）
 - [ ] 4 个 `:::judge` 的 persona 分别是 scholar / veteran / belle / alien，**顺序正确**
 - [ ] 每个 judge 容器的 voice / color 与规范表一致
-- [ ] 每个 script 容器内只渲染**一次**评分卡，不能多次
+- [ ] 每个 script 容器内只调用**一次** show_widget，不能多次
 - [ ] widget_code 总分等于五项之和
 - [ ] 每位 judge 文字 200–300 字
 - [ ] 所有中文属性值都加了双引号
