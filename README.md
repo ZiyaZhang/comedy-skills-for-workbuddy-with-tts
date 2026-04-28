@@ -9,7 +9,7 @@ AI 领笑员（脱口秀评审官）skill + 本地 TTS MCP server，配合 **Wor
 ```
 .
 ├── comedy-tts-mcp/                 # 本地 MCP server，调用火山豆包 TTS 合成 4 段音频
-│   ├── server.js                   # 跨平台：macOS afplay / Windows MediaPlayer / 其他靠 widget
+│   ├── server.js                   # 跨平台：macOS afplay / Windows MediaPlayer / 其他无自动播放
 │   ├── package.json
 │   ├── package-lock.json
 │   └── .env                        # 火山 API Key + 4 个音色 ID（已填好）
@@ -18,8 +18,8 @@ AI 领笑员（脱口秀评审官）skill + 本地 TTS MCP server，配合 **Wor
     │   └── marketplace.json        # marketplace 清单（WorkBuddy 用它发现 plugin）
     └── external_plugins/
         └── comedy-judge/
-            ├── SKILL.md            # skill 主入口（:::script + show_widget + audio_widget）
-            └── references/         # personas / scoring / output_protocol / 两套 widget 模板
+            ├── SKILL.md            # skill 主入口（:::script + 评分卡 + 4×:::judge + TTS）
+            └── references/         # personas / scoring / output_protocol / widget 模板
 ```
 
 ## 在新机器上的部署步骤
@@ -86,16 +86,62 @@ WorkBuddy 用本地目录形态的 marketplace 发现 skill。注册路径指向
 
 1. 一张五维评分卡片（PUNCH/FLOW/CONNECT/ORIGINAL/SURPRISE，总分 500）
 2. 4 段领笑员点评（学识派 → 老登 → 钝感美女 → 外星派，每段 200-300 字）
-3. 一张「四位领笑员朗读」播放器卡片，4 个 `<audio>` 控件指向 `http://localhost:9876/audio/<hash>.mp3`
-4. **macOS** 上：MCP 还会用 `afplay` 自动顺序播放（不必点 widget）；**Windows** 上：用 PowerShell + WPF MediaPlayer 顺序播；**其他平台**：靠 widget 里点播放
+3. **macOS** 上：MCP 自动用 `afplay` 顺序播放 4 段语音；**Windows** 上：用 PowerShell + WPF MediaPlayer 顺序播；**Linux** 等无本机自动播放的平台：MCP 返回里包含 `http://localhost:9876/audio/<hash>.mp3`，可手动用浏览器/curl 播放
+
+> ℹ️ 旧版本会在评分卡之外再渲染一张"四位领笑员朗读"播放器 widget，**当前版本已废弃**——4 段语音完全交给 MCP 本机播放，避免冗余卡片。设计动机详见下文「WorkBuddy 适配设计」。
+
+## WorkBuddy 适配设计
+
+这套 skill 最早是面向 Anthropic Claude.ai 的 Visualizer 工具（`show_widget` / `visualize:show_widget`）做的。Claude.ai 的 Visualizer 是个**宿主级私有工具**，跑在 claude.ai 自家的 iframe 沙箱里：
+
+- 模型通过工具调用产出 `widget_code`
+- 宿主前端把 `widget_code` 塞进独立 iframe 渲染
+- 模型回复正文里裸写 `<div style="...">` 会被 markdown 渲染器剥掉 style，用户看不到
+
+把它搬到 WorkBuddy 上要解决两个问题：
+
+### 1. show_widget 工具不可用 → 双轨制兜底
+
+WorkBuddy 当前会话的工具集里**不一定**会暴露 `show_widget`（不同分支版本/不同会话上下文行为可能不同）。但好消息是：WorkBuddy 的 markdown 渲染器对 `:::script` GFM directive 容器里的**裸 HTML 片段**（带 inline style 的 `<div>`）是**保留样式渲染**的——这是宿主侧的 `VisualizerShowWidgetRenderer` 行为。
+
+所以 SKILL.md（7.1 节）和 `output_protocol.md`（5.0 节）都改成了**双轨制**：
+
+```
+if 本次会话工具集包含 show_widget / visualize:show_widget:
+    → 优先走工具调用（独立 iframe 沙箱，最干净）
+else:
+    → 直接把渲染好的 widget HTML 内联到 :::script 容器内
+```
+
+`widget_template.html` 本来就是按"裸 HTML 片段、所有 style 内联、色值硬编码、宽度 680px 自适应"的口径设计的（见模板顶部注释），无论走哪条路都能用同一份模板，模型只需要做一次占位符替换。
+
+### 2. audio widget 整段废弃
+
+旧版本会在 4 段点评后再调一次 `show_widget` 渲染播放器卡，让用户点 `<audio>` 控件听。问题：
+
+- macOS / Windows 上 MCP server 已经在合成完成后立刻 `afplay` / WPF MediaPlayer 自动顺序播放（fire-and-forget），播放器卡是冗余 UI；
+- 多渲染一张卡片 = 多一次工具调用 + 更长延迟 + 更多 token；
+- 在工具不可用环境里，播放器卡片要再做一遍内联兜底，更繁琐。
+
+新版本（这次提交）的处理：
+
+- **删掉 Step 9（播放器卡片渲染）**，统一由 MCP server 在本机扬声器自动播
+- Linux 等无本机自动播放平台上，MCP 响应里仍带 4 个 `http://localhost:9876/audio/<hash>.mp3`，用户可以手动播放
+- 如果未来想恢复播放器，把 `references/audio_widget_template.html` 重新接到 SKILL.md 即可，模板代码本身没删
+
+### 关键文件
+- `comedy-personal-mp/external_plugins/comedy-judge/SKILL.md` — 主入口，9 步流程（评分卡双轨渲染 + TTS）
+- `comedy-personal-mp/external_plugins/comedy-judge/references/output_protocol.md` — `:::script` / `:::judge` GFM directive 协议、双轨渲染规则
+- `comedy-personal-mp/external_plugins/comedy-judge/references/widget_template.html` — 五维评分卡片裸 HTML 模板（工具调用 + 内联渲染共用）
+- `comedy-tts-mcp/server.js` — fire-and-forget 本机播放（macOS afplay / Windows WPF MediaPlayer），同时启 HTTP server 暴露 url 兜底
 
 ## 平台兼容性
 
-| 平台 | TTS 合成 | 自动播放 | Widget 播放 |
-|------|---------|----------|------------|
-| macOS | ✅ | ✅ afplay | ✅ |
-| Windows | ✅ | ✅ PowerShell MediaPlayer | ✅ |
-| Linux | ✅ | ❌（仅 widget） | ✅ |
+| 平台 | TTS 合成 | 自动播放 | 备用方案 |
+|------|---------|----------|---------|
+| macOS | ✅ | ✅ afplay | — |
+| Windows | ✅ | ✅ PowerShell MediaPlayer | — |
+| Linux | ✅ | ❌ | 手动用 MCP 返回的 `http://localhost:9876/audio/<hash>.mp3` 播放 |
 
 ## 常见问题
 
@@ -121,11 +167,17 @@ WorkBuddy
    │
    ├── 加载 comedy-judge skill (从 comedy-personal-mp marketplace)
    │     │
-   │     └── SKILL.md 指挥模型输出 :::script + show_widget + 4×:::judge
+   │     └── SKILL.md 指挥模型输出：
+   │           :::script
+   │             ├── 评分卡（show_widget 工具 或 :::script 内裸 HTML 内联）
+   │             ├── :::judge × 4 (scholar / veteran / belle / alien)
+   │             └── 调用 comedy-tts.synthesize_judges
+   │           :::
    │
    └── 调用 comedy-tts MCP (stdio) → 火山引擎 TTS API → 4 段 mp3
          │
-         └── 同时 (a) afplay/MediaPlayer 本机播放 (b) HTTP server 暴露 URL 给 audio widget
+         ├── (a) macOS afplay / Windows WPF MediaPlayer 本机自动顺序播放
+         └── (b) HTTP server 暴露 url，Linux 或调试时备用
 ```
 prompt：严格按 [SKILL.md](http://SKILL.md) 的 9 步走完： 1) 第一个 artifact 渲染五维评分卡（widget_template.html 替换占位符） 2) 4 段 markdown 点评（按 scholar→veteran→belle→alien 顺序，每段 200-300 字） 3) 调用 mcp__comedy-tts__synthesize_judges 合成 4 段语音 4) 第二个 artifact 渲染播放器卡（audio_widget_template.html，4 个 src 用 dataUrl 不要用 [localhost](http://localhost) url）
 

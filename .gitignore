@@ -2,3 +2,4 @@ node_modules/
 comedy-tts-mcp/cache/
 .DS_Store
 *.log
+comedy-personal-mp/.plugins-cache.json
