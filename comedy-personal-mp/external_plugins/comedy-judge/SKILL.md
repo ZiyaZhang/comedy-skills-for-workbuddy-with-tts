@@ -154,19 +154,31 @@ mcp__comedy-tts__synthesize_judges({
 - `widget_code`：从 `references/widget_template.html` 读取原始模板，**替换里面所有的占位符**（`{{PERFORMER_NAME}}` / `{{PUNCH_SCORE}}` 等），得到的最终 HTML 片段
 - `loading_messages`：固定数组 `["生成评分卡片", "计算维度权重", "渲染进度条", "准备就绪"]`
 
-**兜底（当前会话工具列表里没有 `show_widget` / `visualize:show_widget` 时）**：直接把渲染好的裸 HTML 片段**内联**写到 `:::script` 容器内、第一个 `:::judge` 之前。`widget_template.html` 整段就是为 WorkBuddy 内联渲染设计的（所有 style 都是 inline、色值全部硬编码、宽度 680px 自适应），可以直接贴进 markdown 容器，前端会保留样式渲染。
+**兜底（当前会话工具列表里没有 `show_widget` / `visualize:show_widget` 时）**：必须执行以下三个动作，**一个不能少**：
 
-判断逻辑很简单：
+1. **读取**：用 read 工具读 `references/widget_template.html`，拿到模板字符串
+2. **替换**：把 12 个占位符（`{{SCRIPT_TITLE}}` / `{{PERFORMER_NAME}}` / `{{TAG_LINE}}` / 5 个 `{{*_SCORE}}` / 5 个 `{{*_COMMENT}}` / `{{TOTAL_SCORE}}` / `{{TOTAL_COMMENT}}`）逐个换成本次的实际值
+3. **输出**：把替换好的**整段裸 HTML 字符串**（约 6KB，从 `<div style="width:100%;...">` 开始到对应 `</div>` 结束）**直接写到回复正文里**，位置必须在 `:::script` 开标签之后、空一行、然后是 HTML、再空一行、然后才是第一个 `:::judge` 开标签
+
+**判断你是否做对了**：
+
+- ✅ 你的回复正文里出现了一段以 `<div style="width:100%;max-width:680px;...` 开头的长 HTML 字符串，且它在 `:::script` 容器内、第一个 `:::judge` 之前 → 对了
+- ❌ `:::script` 开标签之后**直接就是 `:::judge`**，没有任何 HTML 字符串 → **错了，必须返工**。这是最常见的错误：模型以为"分数已经写在 judge 文字里了"就跳过卡片——这是错误的，分数必须在卡片里独立可视化呈现
+- ❌ HTML 被包在三重反引号代码块里（`​`​`​`​`html<div>...</div>​`​`​`​`）→ 错了，会被渲染成代码块而不是组件，必须直接裸写
+- ❌ HTML 写在了 `:::script` 容器外面 → 错了，卡片会和稿件脱钩
+
+判断逻辑：
 
 ```
 if (本次会话工具集包含 show_widget 或 visualize:show_widget):
     走"首选"，发起工具调用
 else:
-    走"兜底"，把渲染好的 HTML 直接写进 :::script 容器
+    走"兜底"，read widget_template.html → 替换占位符 → 整段裸 HTML 写进 :::script
 ```
 
 **不允许做的事**：
 
+- ❌ 跳过卡片渲染，直接进 4 段 judge（**最常见错误，必须杜绝**）
 - ❌ 把卡片 HTML 放进三重反引号代码块展示（会被当成代码而不是渲染）
 - ❌ 把卡片 HTML 写在 `:::script` 容器**外面**
 - ❌ 在工具可用时还坚持走兜底（白白浪费独立 iframe 沙箱）
@@ -189,7 +201,7 @@ else:
 
 - [ ] 第一行是总结句（"我已经为您完成了…"），写在 `:::script` **之前**
 - [ ] `:::script` 开标签顶格、独占一行；含中文的属性值都加了双引号
-- [ ] 在 script 容器内**先**给出评分卡（工具调用或内联 HTML 二选一），**再**输出 4 个 judge
+- [ ] **`:::script` 开标签和第一个 `:::judge` 之间，有一段以 `<div style="width:100%;max-width:680px;...` 开头的长 HTML 字符串**（兜底路径）**或**一次 show_widget 工具调用（首选路径）。**两者都没有 = 漏了卡片 = 必须返工**
 - [ ] widget 总分 = 五项之和
 - [ ] 四个 `:::judge` 顺序：scholar → veteran → belle → alien
 - [ ] 每个 judge 的 voice 属性正确：`scholar-calm` / `veteran-rough` / `belle-vivid` / `alien-curious`
