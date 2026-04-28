@@ -1,6 +1,6 @@
 # comedy-skills-for-workbuddy-with-tts
 
-AI 领笑员（脱口秀评审官）skill + 本地 TTS MCP server，配合 **WorkBuddy 国际版** 使用，开箱即用。
+AI 领笑员（脱口秀评审官）skill + 本地 TTS MCP server，配合 **WorkBuddy 国际版** 开箱即用。
 
 > ⚠️ **本仓库为 PRIVATE，`.env` 直接附带了火山引擎 API Key**。**请保持仓库私有**，不要 fork 或转 public。如果需要公开发布，请先把 `.env` 移除并改回 `.env.example`。
 
