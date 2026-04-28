@@ -179,7 +179,20 @@ WorkBuddy
          ├── (a) macOS afplay / Windows WPF MediaPlayer 本机自动顺序播放
          └── (b) HTTP server 暴露 url，Linux 或调试时备用
 ```
-prompt：严格按 [SKILL.md](http://SKILL.md) 的 9 步走完： 1) 第一个 artifact 渲染五维评分卡（widget_template.html 替换占位符） 2) 4 段 markdown 点评（按 scholar→veteran→belle→alien 顺序，每段 200-300 字） 3) 调用 mcp__comedy-tts__synthesize_judges 合成 4 段语音 4) 第二个 artifact 渲染播放器卡（audio_widget_template.html，4 个 src 用 dataUrl 不要用 [localhost](http://localhost) url）
+
+## 推荐 prompt
+
+```
+用 comedy-judge 评价这份稿件，严格按 SKILL.md 的 9 步走完：
+1) :::script 容器内先渲染五维评分卡片（show_widget 工具不可用就把 widget_template.html 渲染好的裸 HTML 直接内联）
+2) 4 段 markdown 点评（scholar → veteran → belle → alien，每段 200-300 字）
+3) 调用 synthesize_judges 合成 4 段语音（macOS / Windows 会自动播放，无需播放器卡片）
+4) 闭合 :::script，之后不再输出任何文字
+
+[稿件正文]
+```
+
+如果宿主前端能正常识别 `:::script` 容器并暴露 `show_widget` 工具，第 1 步可以直接说"调 show_widget 渲染评分卡"；当前 WorkBuddy 大多数会话需要走内联兜底。
 
 ## License
 
