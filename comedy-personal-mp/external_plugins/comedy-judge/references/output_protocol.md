@@ -231,7 +231,7 @@ show_widget({
 
 **不在 skill 内部做批量循环**。多稿件由 agent 自动拆解，逐份调用 skill。每份稿件的 `:::script` 容器之间用**正常换行**隔开即可，不需要额外分隔符。
 
-唯一约束：每份稿件输出必须是**完整独立**的 `:::script` 容器（含 1 个 show_widget + 4 个 judge），不要交叉混合。
+唯一约束：每份稿件输出必须是**完整独立**的 `:::script` 容器（含 1 个 show_widget 评分卡 + 4 个 judge + 1 次 synthesize_judges MCP 调用，**不含**第二个 show_widget），不要交叉混合。
 
 ---
 
@@ -258,7 +258,8 @@ show_widget({
 - [ ] **show_widget 调用在所有 `:::judge` 之前**（卡片先于评论）
 - [ ] 4 个 `:::judge` 的 persona 分别是 scholar / veteran / belle / alien，**顺序正确**
 - [ ] 每个 judge 容器的 voice / color 与规范表一致
-- [ ] 每个 script 容器内只调用**一次** show_widget，不能多次
+- [ ] 每个 script 容器内只调用**一次** show_widget，不能多次（评分卡之后**不要**再发第二个 show_widget 渲染播放器）
+- [ ] 4 个 `:::judge` 写完后调用了一次 `synthesize_judges` MCP，让 macOS/Windows 自动外放 4 段语音
 - [ ] widget_code 总分等于五项之和
 - [ ] 每位 judge 文字 200–300 字
 - [ ] 所有中文属性值都加了双引号

@@ -11,10 +11,11 @@ description: "AI领笑员（脱口秀评审官）。当用户提供脱口秀稿�
 
 1. **一张五维评分可视化卡片** — 通过 `show_widget` 工具渲染（先给结论）
 2. **四位领笑员的互动点评** — 每人按各自人设给出 200–300 字的现场反应（再给详解）
+3. **4 段语音点评** — 通过 `synthesize_judges` MCP 合成，**在 macOS / Windows 上由 MCP server 自动用本机扬声器顺序播放**（学识派 → 老登 → 钝感美女 → 外星派）。**不渲染播放器卡片**——系统已经在外放，不需要再叠一张多余的可视化播放器
 
 ## 多稿件约束（重要）
 
-**skill 本身只处理单份稿件。** 如果用户同时提供多份稿件，由 agent 逐份调度，每份走完整的 Step 1–7 流程，**严禁交叉输出**。
+**skill 本身只处理单份稿件。** 如果用户同时提供多份稿件，由 agent 逐份调度，每份走完整的 Step 1–9 流程，**严禁交叉输出**。
 
 ## 工作流程
 
@@ -61,9 +62,9 @@ description: "AI领笑员（脱口秀评审官）。当用户提供脱口秀稿�
 
 ### Step 7: 生成主体输出（评分卡 + 4 段点评）
 
-输出格式为 `:::script` 容器，**容器内**先调用 `show_widget` 工具，再嵌套四个 `:::judge` 容器。**严格按 `output_protocol.md` 第二、三、四节的语法**。这一步先**不**闭合 `:::script`——后面 Step 8/9/10 还要继续。
+输出格式为 `:::script` 容器，**容器内**先调用 `show_widget` 工具，再嵌套四个 `:::judge` 容器。**严格按 `output_protocol.md` 第二、三、四节的语法**。这一步先**不**闭合 `:::script`——后面 Step 8/9 还要继续。
 
-完整结构（含 Step 8/9/10）：
+完整结构（含 Step 8/9）：
 
 ```
 我已经为您完成了关于脱口秀稿件《{{稿件标题}}》的五维评分以及四位领笑员点评，以下是详细评价：
@@ -96,9 +97,7 @@ description: "AI领笑员（脱口秀评审官）。当用户提供脱口秀稿�
 
 :::
 
-[Step 8: 调用 mcp__comedy-tts__synthesize_judges 合成 4 段音频]
-
-[Step 9: 再调用 show_widget 渲染播放器卡片（audio_widget_template.html）]
+[Step 8: 调用 mcp__comedy-tts__synthesize_judges 合成 4 段音频；MCP 在 macOS/Windows 上自动用本机扬声器顺序播放，不再渲染播放器卡片]
 
 :::
 ```
@@ -117,18 +116,15 @@ mcp__comedy-tts__synthesize_judges({
   ]
 })
 ```
-返回 `{ audios: [{ persona, url }, ...] }` —— 4 个 `http://localhost:9876/audio/<hash>.mp3`。
+返回 `{ audios: [{ persona, url }, ...], playing: true/false, platform: "darwin"/... }` —— 4 个 `http://localhost:9876/audio/<hash>.mp3`。
 
-### Step 9: 渲染播放器卡片（第二个 show_widget）
+**MCP server 在 macOS（afplay）和 Windows（PowerShell + WPF MediaPlayer）上会自动用本机扬声器顺序播放这 4 段音频**（学识派 → 老登 → 钝感美女 → 外星派），不需要任何前端控件。响应里的 `playing: true` 就表示已经在播了。
 
-紧接着 Step 8，再发起一次 `show_widget`：
-- `title`: `四位领笑员朗读`
-- `widget_code`: 读 `references/audio_widget_template.html`，把 `{{SCHOLAR_URL}}` / `{{VETERAN_URL}}` / `{{BELLE_URL}}` / `{{ALIEN_URL}}` 替换成 Step 8 拿到的 url
-- `loading_messages`: `["调用豆包大模型语音合成", "学识派完成", "老登完成", "钝感美女完成", "外星派完成"]`
+**绝对不要再调用第二次 show_widget 来渲染播放器卡片**。系统已经在外放，再叠一张可视化播放器只会是冗余视觉噪音。在 Linux 等无本机自动播放的平台上，用户可以用响应里的 url 自行播放，但 skill 输出**不**渲染播放器。
 
-### Step 10: 关闭 `:::script`
+### Step 9: 关闭 `:::script`
 
-写完 Step 9 后顶格写一行 `:::`。**之后什么都不写**。
+写完 Step 8 后顶格写一行 `:::`。**之后什么都不写**。
 
 **关键顺序要求**：
 
@@ -136,7 +132,9 @@ mcp__comedy-tts__synthesize_judges({
 - 紧接着输出 `:::script` 开标签（顶格、独占一行）
 - script 容器内：**先**调用一次 show_widget（先给结论），**再**输出四个 `:::judge` 容器
 - 四个 `:::judge` 顺序固定：scholar → veteran → belle → alien
-- 四个 judge 全部写完后，输出 `:::script` 的闭标签 `:::`
+- 四个 judge 全部写完后，调用一次 `synthesize_judges` MCP（Step 8）
+- **不要再调任何第二次 show_widget**（macOS/Windows 已经在自动外放，播放器卡片是冗余）
+- 最后输出 `:::script` 的闭标签 `:::`
 - **`:::script` 闭合之后绝对不再输出任何文字**（评分已经在卡片里给过了，不必重复总结、不写"以上"、不写任何过渡语）
 
 **容器语法硬规则**（违反会让前端解析失败）：
@@ -165,13 +163,13 @@ mcp__comedy-tts__synthesize_judges({
 ## 输出核心规则
 
 1. **`:::` 容器语法**：严格遵守 `output_protocol.md`；三个冒号顶格独占一行；属性值含中文必须加双引号；闭标签只写 `:::`；正文与开/闭标签之间各空一行
-2. **输出顺序严格固定**：① 总结句 → ② `:::script` 开标签 → ③ show_widget 工具调用 → ④ 四个 `:::judge` 容器 → ⑤ `:::script` 闭标签
+2. **输出顺序严格固定**：① 总结句 → ② `:::script` 开标签 → ③ show_widget 工具调用（评分卡） → ④ 四个 `:::judge` 容器 → ⑤ synthesize_judges MCP 调用 → ⑥ `:::script` 闭标签
 3. **四位人设顺序固定**：scholar → veteran → belle → alien（先专业切入 → 再阅历评判 → 再观众情绪 → 最后外部视角收尾）
 4. **每个 `:::judge` 的 persona/name/voice/color 四个属性必须严格匹配 `output_protocol.md` 第 4.3 节**：scholar 用 `voice=scholar-calm color=#3B82F6`、veteran 用 `voice=veteran-rough color=#B45309`、belle 用 `voice=belle-vivid color=#EC4899`、alien 用 `voice=alien-curious color=#10B981`。**前端要直接拿 voice 传给 TTS API，写错就播错音色**
 5. **打分客观独立**：五维分数不受人设影响，人设只影响点评语气
 6. **分数格式**：整数，5 为步长，范围 0–100；**总分必须等于五项之和**（不能算错）
 7. **不要用 90+**：除非稿件确实达到行业顶尖水平（scoring_guide.md 的参考案例）
-8. **show_widget 必须通过工具调用**：禁止把卡片 HTML 作为消息文本输出；在 `:::script` 开标签之后、第一个 `:::judge` 之前发起**且只发起一次** `show_widget`
+8. **show_widget 必须通过工具调用**：禁止把卡片 HTML 作为消息文本输出；在 `:::script` 开标签之后、第一个 `:::judge` 之前发起**且只发起一次** `show_widget`；**不要**在 4 个 judge 之后再调第二次 show_widget 渲染播放器（系统已自动外放）
 9. **`:::script` 闭合之后绝对不输出任何文字**：不写"总分"、不写"以上"、不写任何过渡语；评分已经在卡片里展示过了
 10. **中文输出**：所有正文文本必须用中文；属性键名（`persona` / `voice` / `color` 等）保持英文小写
 
@@ -187,6 +185,8 @@ mcp__comedy-tts__synthesize_judges({
 - [ ] 每个 `:::judge` 开标签下空一行再写正文，正文写完空一行再写 `:::` 闭标签
 - [ ] 闭标签只写 `:::`，没有写成 `:::judge` 或 `:::script`
 - [ ] 每位点评字数控制在 200–300 字
+- [ ] 4 个 `:::judge` 写完后，调用了一次 `synthesize_judges` MCP 合成 4 段语音（macOS/Windows 会自动外放）
+- [ ] **没有调用第二次 show_widget**（播放器卡片不渲染）
 - [ ] 最外层有 `:::script` 的 `:::` 闭标签
 - [ ] `:::script` 闭标签之后没有任何文字输出
 
