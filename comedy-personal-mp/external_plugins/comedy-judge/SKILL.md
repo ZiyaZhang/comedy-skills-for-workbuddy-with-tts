@@ -39,7 +39,7 @@ description: "AI领笑员（脱口秀评审官）。当用户提供脱口秀稿�
 
 ### Step 3: 阅读输出协议
 
-阅读 `references/output_protocol.md` —— 这是 `:::script` / `:::judge` 容器的语法规范、属性字典、以及每个 persona 对应的 voice/color 锁定值。**所有输出都必须严格遵守这份协议**：前端要靠 `voice` 属性调 TTS API、靠 `color` 属性渲染头像色块。
+阅读 `references/output_protocol.md` —— 里面定义了每位领笑员对应的二级标题（`## 🎓 学识派` 等）、persona / voice 锁定值。**所有输出都必须严格遵守这份协议**：调 MCP 时要按 `voice` 锁定值才能播对音色。
 
 ### Step 4: 阅读四位领笑员人设
 
@@ -62,49 +62,48 @@ description: "AI领笑员（脱口秀评审官）。当用户提供脱口秀稿�
 
 ### Step 7: 生成主体输出（评分卡 + 4 段点评）
 
-输出格式为 `:::script` 容器，**容器内**先调用 `show_widget` 工具，再嵌套四个 `:::judge` 容器。**严格按 `output_protocol.md` 第二、三、四节的语法**。这一步先**不**闭合 `:::script`——后面 Step 8/9 还要继续。
+输出顺序：**先**调用 `show_widget` 工具渲染评分卡，**再**输出四段领笑员点评。每段点评用 markdown 二级标题 + 200-300 字正文。**不要使用 `:::script` 或 `:::judge` 这类 GFM container directive**（WorkBuddy 渲染器不识别，会把开标签当字面文字暴露在对话里）。
 
-完整结构（含 Step 8/9）：
+完整结构（含 Step 8）：
 
 ```
 我已经为您完成了关于脱口秀稿件《{{稿件标题}}》的五维评分以及四位领笑员点评，以下是详细评价：
 
-:::script id=script-1 name="{{稿件标题}}" performer="{{选手名}}"
-
 [Step 7: 调用 show_widget 渲染五维评分卡片，参数见 7.1]
 
-:::judge persona=scholar name="学识派" voice=scholar-calm color=#3B82F6
+## 🎓 学识派
 
 [200-300 字，学识派]
 
-:::
-
-:::judge persona=veteran name="老登" voice=veteran-rough color=#B45309
+## 🍷 老登
 
 [200-300 字，老登]
 
-:::
-
-:::judge persona=belle name="钝感美女" voice=belle-vivid color=#EC4899
+## 💃 钝感美女
 
 [200-300 字，钝感美女]
 
-:::
-
-:::judge persona=alien name="外星派" voice=alien-curious color=#10B981
+## 👽 外星派
 
 [200-300 字，外星派]
 
-:::
-
 [Step 8: 调用 mcp__comedy-tts__synthesize_judges 合成 4 段音频；MCP 在 macOS/Windows 上自动用本机扬声器顺序播放，不再渲染播放器卡片]
-
-:::
 ```
+
+**四位领笑员的固定二级标题**（一字不能错）：
+
+| 顺序 | 标题（直接写到正文里） | 对应 persona | 对应 voice |
+|------|------------------------|--------------|-----------|
+| 1 | `## 🎓 学识派` | scholar | scholar-calm |
+| 2 | `## 🍷 老登` | veteran | veteran-rough |
+| 3 | `## 💃 钝感美女` | belle | belle-vivid |
+| 4 | `## 👽 外星派` | alien | alien-curious |
+
+`persona` / `voice` 这两个值**只在 Step 8 调 MCP 时使用**（见 Step 8 的 items 数组），不要写到对话正文里。
 
 ### Step 8: 调用 MCP 合成 4 段音频（硬性要求）
 
-四个 `:::judge` 容器全部写完之后、`:::script` 闭合之前，发起一次 MCP 工具调用：
+四段领笑员点评全部写完之后，发起一次 MCP 工具调用：
 
 ```
 mcp__comedy-tts__synthesize_judges({
@@ -122,34 +121,32 @@ mcp__comedy-tts__synthesize_judges({
 
 **绝对不要再调用第二次 show_widget 来渲染播放器卡片**。系统已经在外放，再叠一张可视化播放器只会是冗余视觉噪音。在 Linux 等无本机自动播放的平台上，用户可以用响应里的 url 自行播放，但 skill 输出**不**渲染播放器。
 
-### Step 9: 关闭 `:::script`
+### Step 9: 收尾
 
-写完 Step 8 后顶格写一行 `:::`。**之后什么都不写**。
+写完 Step 8 之后**整个输出就结束了**。不再追加任何文字（评分已经在卡片里给过了，不必重复总结、不写"以上"、不写任何过渡语）。
 
 **关键顺序要求**：
 
-- 第一行先输出总结句（`我已经为您完成了…` 那一行，**写在 `:::script` 之前**）
-- 紧接着输出 `:::script` 开标签（顶格、独占一行）
-- script 容器内：**先**调用一次 show_widget（先给结论），**再**输出四个 `:::judge` 容器
-- 四个 `:::judge` 顺序固定：scholar → veteran → belle → alien
-- 四个 judge 全部写完后，调用一次 `synthesize_judges` MCP（Step 8）
+- 第一行先输出总结句（`我已经为您完成了…`）
+- **第二步：调用 show_widget 工具渲染评分卡**（先给结论）
+- 然后输出 4 段领笑员点评，每段用二级标题：`## 🎓 学识派` / `## 🍷 老登` / `## 💃 钝感美女` / `## 👽 外星派`，正文 200-300 字
+- 四位顺序固定：scholar → veteran → belle → alien（先专业切入 → 再阅历评判 → 再观众情绪 → 最后外部视角收尾）
+- 4 段点评全部写完后，调用一次 `synthesize_judges` MCP（Step 8）
 - **不要再调任何第二次 show_widget**（macOS/Windows 已经在自动外放，播放器卡片是冗余）
-- 最后输出 `:::script` 的闭标签 `:::`
-- **`:::script` 闭合之后绝对不再输出任何文字**（评分已经在卡片里给过了，不必重复总结、不写"以上"、不写任何过渡语）
+- 调用结束后**整个回复就到这里**，不要再追加任何文字
 
-**容器语法硬规则**（违反会让前端解析失败）：
+**输出格式硬规则**：
 
-- 三个冒号 `:::` 必须**顶格、独占一行**，前面不能有空格
-- `:::judge` 开标签写完要**换行 + 空一行**再写正文，正文写完再**空一行**写 `:::` 闭标签
-- 闭标签只写 `:::`，不要写 `:::judge` 或 `:::script`
-- 属性值含中文或空格时**必须加双引号**（`name="A-普通却自信"`），纯英文/数字/hex 色值可以不加（`persona=scholar` / `color=#3B82F6`）
-- 每个 `:::judge` 容器的 `persona` / `voice` / `color` 三个属性的值**必须严格按 `output_protocol.md` 第 4.3 节的锁定值**，一个字符都不能错（前端就靠这些值调 TTS、渲染头像）
+- **不要使用 `:::script` / `:::judge` 这类 GFM container directive**——WorkBuddy 渲染器不识别，开标签会作为字面文字暴露给用户（你看到 `:::judge persona=scholar...` 这种文本就是这个原因）
+- 4 段点评的小标题必须用 markdown 二级标题 `## 🎓 学识派` 等，**不要**用 `### ` 三级标题（视觉权重不够）
+- emoji 必须紧跟在 `## ` 后面、名字之前，**有一个空格隔开**
+- persona / voice / color 这些元数据**只在 Step 8 调 MCP 的 items 数组里使用**，**绝不写到正文标题里**
 
 ### 7.1 五维卡片必须用 show_widget 工具调用（硬性要求）
 
-**绝对禁止**：不要把卡片 HTML 直接写在消息文本里、不要放进代码块展示、不要写在 `:::script` 容器外面。
+**绝对禁止**：不要把卡片 HTML 直接写在消息文本里、不要放进代码块展示。
 
-**必须做的**：在 `:::script` 开标签之后、第一个 `:::judge` 之前，发起一次 `show_widget` 工具调用，参数如下：
+**必须做的**：在总结句之后、第一段领笑员点评之前，发起一次 `show_widget` 工具调用，参数如下：
 
 - `title`：固定为 `AI 评分`
 - `widget_code`：从 `references/widget_template.html` 读取原始模板，**替换里面所有的占位符**（`{{PERFORMER_NAME}}` / `{{PUNCH_SCORE}}` 等），得到的最终 HTML 片段
@@ -162,37 +159,36 @@ mcp__comedy-tts__synthesize_judges({
 
 ## 输出核心规则
 
-1. **`:::` 容器语法**：严格遵守 `output_protocol.md`；三个冒号顶格独占一行；属性值含中文必须加双引号；闭标签只写 `:::`；正文与开/闭标签之间各空一行
-2. **输出顺序严格固定**：① 总结句 → ② `:::script` 开标签 → ③ show_widget 工具调用（评分卡） → ④ 四个 `:::judge` 容器 → ⑤ synthesize_judges MCP 调用 → ⑥ `:::script` 闭标签
+1. **不要使用 GFM container directive**：`:::script` / `:::judge` 这类开闭标签 WorkBuddy 渲染器不识别，会作为字面文字暴露给用户。每段领笑员点评只用 markdown 二级标题：`## 🎓 学识派` / `## 🍷 老登` / `## 💃 钝感美女` / `## 👽 外星派`
+2. **输出顺序严格固定**：① 总结句 → ② show_widget 工具调用（评分卡） → ③ 4 段领笑员点评（每段：## emoji 名字 + 200-300 字正文） → ④ synthesize_judges MCP 调用 → 结束
 3. **四位人设顺序固定**：scholar → veteran → belle → alien（先专业切入 → 再阅历评判 → 再观众情绪 → 最后外部视角收尾）
-4. **每个 `:::judge` 的 persona/name/voice/color 四个属性必须严格匹配 `output_protocol.md` 第 4.3 节**：scholar 用 `voice=scholar-calm color=#3B82F6`、veteran 用 `voice=veteran-rough color=#B45309`、belle 用 `voice=belle-vivid color=#EC4899`、alien 用 `voice=alien-curious color=#10B981`。**前端要直接拿 voice 传给 TTS API，写错就播错音色**
+4. **每位领笑员的标题、persona、voice 一一对应**（写错 voice 就播错音色）：
+   - 学识派 → `## 🎓 学识派` → persona=`scholar` voice=`scholar-calm`
+   - 老登 → `## 🍷 老登` → persona=`veteran` voice=`veteran-rough`
+   - 钝感美女 → `## 💃 钝感美女` → persona=`belle` voice=`belle-vivid`
+   - 外星派 → `## 👽 外星派` → persona=`alien` voice=`alien-curious`
 5. **打分客观独立**：五维分数不受人设影响，人设只影响点评语气
 6. **分数格式**：整数，5 为步长，范围 0–100；**总分必须等于五项之和**（不能算错）
 7. **不要用 90+**：除非稿件确实达到行业顶尖水平（scoring_guide.md 的参考案例）
-8. **show_widget 必须通过工具调用**：禁止把卡片 HTML 作为消息文本输出；在 `:::script` 开标签之后、第一个 `:::judge` 之前发起**且只发起一次** `show_widget`；**不要**在 4 个 judge 之后再调第二次 show_widget 渲染播放器（系统已自动外放）
-9. **`:::script` 闭合之后绝对不输出任何文字**：不写"总分"、不写"以上"、不写任何过渡语；评分已经在卡片里展示过了
-10. **中文输出**：所有正文文本必须用中文；属性键名（`persona` / `voice` / `color` 等）保持英文小写
+8. **show_widget 必须通过工具调用**：禁止把卡片 HTML 作为消息文本输出；在总结句之后、第一段领笑员点评之前发起**且只发起一次** `show_widget`；**不要**在 4 段点评之后再调第二次 show_widget 渲染播放器（系统已自动外放）
+9. **回复结尾干净**：调完 synthesize_judges 整个回复就结束，不写"总分"、不写"以上"、不写任何过渡语；评分已经在卡片里展示过了
+10. **中文输出**：所有正文文本必须用中文；persona / voice 这些英文 ID 保持小写
 
 ## 输出后的自检
 
-- [ ] 第一行是总结句（"我已经为您完成了…"），写在 `:::script` **之前**
-- [ ] `:::script` 开标签顶格、独占一行；含中文的属性值都加了双引号
-- [ ] 在 script 容器内**先**调用了一次（且仅一次）show_widget，**再**输出 4 个 judge
+- [ ] 第一行是总结句（"我已经为您完成了…"），写在 show_widget 调用**之前**
+- [ ] 调用了一次（且仅一次）show_widget 渲染评分卡
 - [ ] widget 总分 = 五项之和
-- [ ] 四个 `:::judge` 顺序：scholar → veteran → belle → alien
-- [ ] 每个 judge 的 voice 属性正确：`scholar-calm` / `veteran-rough` / `belle-vivid` / `alien-curious`
-- [ ] 每个 judge 的 color 属性正确：`#3B82F6` / `#B45309` / `#EC4899` / `#10B981`
-- [ ] 每个 `:::judge` 开标签下空一行再写正文，正文写完空一行再写 `:::` 闭标签
-- [ ] 闭标签只写 `:::`，没有写成 `:::judge` 或 `:::script`
-- [ ] 每位点评字数控制在 200–300 字
-- [ ] 4 个 `:::judge` 写完后，调用了一次 `synthesize_judges` MCP 合成 4 段语音（macOS/Windows 会自动外放）
+- [ ] 4 段领笑员点评的标题严格是 `## 🎓 学识派` / `## 🍷 老登` / `## 💃 钝感美女` / `## 👽 外星派`，**没有任何 `:::judge` / `:::script` 之类的 directive**
+- [ ] 4 段点评顺序：scholar → veteran → belle → alien
+- [ ] 每段点评字数控制在 200–300 字
+- [ ] 4 段点评全部写完后，调用了一次 `synthesize_judges` MCP（items 数组里的 voice 顺序：`scholar-calm` / `veteran-rough` / `belle-vivid` / `alien-curious`）
 - [ ] **没有调用第二次 show_widget**（播放器卡片不渲染）
-- [ ] 最外层有 `:::script` 的 `:::` 闭标签
-- [ ] `:::script` 闭标签之后没有任何文字输出
+- [ ] synthesize_judges 调完后没有再追加任何文字
 
 ## 资源参考
 
-- `references/output_protocol.md` — **`:::` 容器语法规范、属性字典、persona ↔ voice/color 锁定表（必读）**
+- `references/output_protocol.md` — **4 段领笑员二级标题 + persona ↔ voice 锁定表（必读）**
 - `references/personas.md` — 四种领笑员人设的详细定义、语言风格和示例
 - `references/scoring_guide.md` — 五维评分的详细标准、分值区间含义、参考案例
 - `references/widget_template.html` — **五维卡片 HTML 模板（必读）**，用于 show_widget 调用
