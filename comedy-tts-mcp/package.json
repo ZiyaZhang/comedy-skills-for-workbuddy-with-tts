@@ -1,0 +1,16 @@
+{
+  "name": "comedy-tts-mcp",
+  "version": "0.1.0",
+  "description": "Local MCP server that synthesizes the 4 comedy-judge personas into 4 different Volcengine TTS voices",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.4"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

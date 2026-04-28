@@ -1,0 +1,20 @@
+{
+    "name": "personal-comedy",
+    "description": "ziya 的个人 marketplace —— 包含 comedy-judge 脱口秀评审 skill",
+    "owner": {
+        "name": "ziya",
+        "email": "zzy211851@gmail.com"
+    },
+    "plugins": [
+        {
+            "name": "comedy-judge",
+            "description": "AI 领笑员（脱口秀评审官）。当用户提供脱口秀稿件并希望获得评价时触发。提供五维打分（PUNCH/FLOW/CONNECT/ORIGINAL/SURPRISE）+ 四位人设领笑员（学识派/老登/钝感美女/外星派）的互动点评，每位 200-300 字，配合 comedy-tts MCP 自动生成 4 个不同音色的语音播放。触发词：脱口秀评价、领笑员、点评脱口秀、单口喜剧评分、stand-up review、打分脱口秀、评审脱口秀稿件。",
+            "version": "1.0.0",
+            "source": "./external_plugins/comedy-judge",
+            "author": {
+                "name": "ziya"
+            },
+            "license": "MIT"
+        }
+    ]
+}

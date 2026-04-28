@@ -1,0 +1,4 @@
+node_modules/
+comedy-tts-mcp/cache/
+.DS_Store
+*.log
