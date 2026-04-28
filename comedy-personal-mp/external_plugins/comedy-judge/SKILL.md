@@ -11,7 +11,7 @@ description: "AI领笑员（脱口秀评审官）。当用户提供脱口秀稿�
 
 1. **一张五维评分可视化卡片** — 在 `:::script` 容器内渲染（先给结论）。**优先**通过 `show_widget` 工具调用渲染；**当前会话未暴露 `show_widget` 工具时**，直接把 `widget_template.html` 渲染好的裸 HTML 片段内联进 `:::script` 容器（WorkBuddy 的 markdown 渲染器会保留 inline style）
 2. **四位领笑员的互动点评** — 每人按各自人设给出 200–300 字的现场反应（再给详解）
-3. **4 段语音点评** — 通过 `synthesize_judges` MCP 合成，**在 macOS / Windows 上由 MCP server 自动用本机扬声器顺序播放**（学识派 → 老登 → 钝感美女 → 外星派），无需任何前端播放控件，也**不再渲染 audio widget 卡片**
+3. **4 段语音点评** — 通过 `synthesize_judges` MCP 合成，**在 macOS / Windows 上由 MCP server 自动用本机扬声器顺序播放**（学识派 → 老登 → 钝感美女 → 外星派）。**默认不渲染播放器卡片**——既然系统已经在外放，就不必再多一张多余的 audio widget。仅当用户明确要求"补一张播放器"或运行环境无法本机自动播放（如 Linux）时，才走可选的 Step 9 渲染播放器
 
 ## 多稿件约束（重要）
 
@@ -99,6 +99,8 @@ description: "AI领笑员（脱口秀评审官）。当用户提供脱口秀稿�
 
 [Step 8: 调用 synthesize_judges 合成 4 段音频；MCP 在 macOS/Windows 上会自动用本机扬声器顺序播放]
 
+[Step 9（可选，默认跳过）: 仅当用户明确要播放器、或运行环境无本机自动播放时，才在此处发起第二次 show_widget 渲染播放器卡片]
+
 :::
 ```
 
@@ -121,11 +123,32 @@ mcp__comedy-tts__synthesize_judges({
 
 **MCP server 在 macOS（afplay）和 Windows（PowerShell + WPF MediaPlayer）上会自动用本机扬声器顺序播放这 4 段音频**（学识派 → 老登 → 钝感美女 → 外星派），不需要任何前端控件。响应里的 `playing: true` 就表示已经在播了。
 
-**绝对不要再调用第二次 show_widget 来渲染播放器卡片**。本 skill 已废弃 audio widget 输出，4 段音频完全交给 MCP 本机播放。在 Linux 等无本机自动播放的平台上，用户可以手动用 `:::script` 闭合后的 url 自行播放，但 skill 输出**不**渲染播放器。
+**默认情况下：写完 Step 8 直接进 Step 10 闭合 `:::script`，不要再调一次 show_widget 去渲染播放器卡片。** 系统已经在外放，再叠一张可视化播放器只会是冗余视觉噪音。仅当 Step 9 被触发（见下）时才补播放器。
 
-### Step 9: 关闭 `:::script`
+### Step 9（可选，默认跳过）：渲染播放器卡片
 
-写完 Step 8 之后，顶格写一行 `:::` 闭合 `:::script` 容器。**之后什么都不写**。
+**默认完全跳过这一步**，直接进 Step 10 闭合 `:::script`。
+
+仅在以下两种情形下才在 `:::script` 容器内、Step 10 闭合之前发起第二次 `show_widget` 调用渲染播放器卡片：
+
+1. **用户明确要求**："最后追加一张播放器卡片" / "把播放器也补上" / "我要看到 audio 控件" 等
+2. **运行环境无本机自动播放**：`synthesize_judges` 返回 `playing: false`、或 `platform` 既不是 `darwin` 也不是 `win32`（典型如 Linux 容器、CI 环境）
+
+播放器卡片调用示意（仅在上述两种情形下使用）：
+
+```
+show_widget({
+  title: "AI 领笑员语音",
+  widget_code: "<根据 4 段 audio url 拼出的 audio 列表 HTML 片段>",
+  loading_messages: ["合成语音", "排队播放", "准备控件", "就绪"]
+})
+```
+
+`widget_code` 自由发挥即可——4 段 audio + 顺序播放按钮。这是**逃生通道**，不是默认路径。
+
+### Step 10: 关闭 `:::script`
+
+写完 Step 8（或可选的 Step 9）之后，顶格写一行 `:::` 闭合 `:::script` 容器。**之后什么都不写**。
 
 **关键顺序要求**：
 
@@ -134,7 +157,7 @@ mcp__comedy-tts__synthesize_judges({
 - script 容器内：**先**渲染五维评分卡片（先给结论），**再**输出四个 `:::judge` 容器
 - 四个 `:::judge` 顺序固定：scholar → veteran → belle → alien
 - 四个 judge 全部写完后，调用一次 `synthesize_judges`（Step 8）
-- **不要再调任何第二次 show_widget**（播放器卡片已废弃，macOS/Windows 已经自动播放）
+- **默认不再调第二次 show_widget**（系统已在外放，播放器卡片是冗余）；仅在 Step 9 的两种触发情形下才补一张播放器卡片
 - 最后输出 `:::script` 的闭标签 `:::`
 - **`:::script` 闭合之后绝对不再输出任何文字**（评分已经在卡片里给过了，不必重复总结、不写"以上"、不写任何过渡语）
 
@@ -187,13 +210,13 @@ else:
 ## 输出核心规则
 
 1. **`:::` 容器语法**：严格遵守 `output_protocol.md`；三个冒号顶格独占一行；属性值含中文必须加双引号；闭标签只写 `:::`；正文与开/闭标签之间各空一行
-2. **输出顺序严格固定**：① 总结句 → ② `:::script` 开标签 → ③ 评分卡（show_widget 工具调用 或 内联 HTML） → ④ 四个 `:::judge` 容器 → ⑤ synthesize_judges MCP 调用 → ⑥ `:::script` 闭标签
+2. **输出顺序严格固定**：① 总结句 → ② `:::script` 开标签 → ③ 评分卡（show_widget 工具调用 或 内联 HTML） → ④ 四个 `:::judge` 容器 → ⑤ synthesize_judges MCP 调用 → ⑥（可选）播放器卡片 show_widget → ⑦ `:::script` 闭标签
 3. **四位人设顺序固定**：scholar → veteran → belle → alien（先专业切入 → 再阅历评判 → 再观众情绪 → 最后外部视角收尾）
 4. **每个 `:::judge` 的 persona/name/voice/color 四个属性必须严格匹配 `output_protocol.md` 第 4.3 节**：scholar 用 `voice=scholar-calm color=#3B82F6`、veteran 用 `voice=veteran-rough color=#B45309`、belle 用 `voice=belle-vivid color=#EC4899`、alien 用 `voice=alien-curious color=#10B981`。**前端要直接拿 voice 传给 TTS API，写错就播错音色**
 5. **打分客观独立**：五维分数不受人设影响，人设只影响点评语气
 6. **分数格式**：整数，5 为步长，范围 0–100；**总分必须等于五项之和**（不能算错）
 7. **不要用 90+**：除非稿件确实达到行业顶尖水平（scoring_guide.md 的参考案例）
-8. **评分卡片渲染**：评分卡片必须出现在 `:::script` 容器内、4 个 `:::judge` 之前。当本次会话工具列表里有 `show_widget` 或 `visualize:show_widget` 时，**优先**用工具调用；当工具不可用时，**直接把渲染好的 widget HTML 内联写到 `:::script` 容器内**（详见 7.1 节）。播放器卡片已废弃，无论如何都不要再发起第二次 show_widget
+8. **评分卡片渲染**：评分卡片必须出现在 `:::script` 容器内、4 个 `:::judge` 之前。当本次会话工具列表里有 `show_widget` 或 `visualize:show_widget` 时，**优先**用工具调用；当工具不可用时，**直接把渲染好的 widget HTML 内联写到 `:::script` 容器内**（详见 7.1 节）。**播放器卡片默认不渲染**——MCP 已在 macOS/Windows 自动外放——仅在 Step 9 两种触发情形下才补
 9. **`:::script` 闭合之后绝对不输出任何文字**：不写"总分"、不写"以上"、不写任何过渡语；评分已经在卡片里展示过了
 10. **中文输出**：所有正文文本必须用中文；属性键名（`persona` / `voice` / `color` 等）保持英文小写
 
@@ -210,7 +233,7 @@ else:
 - [ ] 闭标签只写 `:::`，没有写成 `:::judge` 或 `:::script`
 - [ ] 每位点评字数控制在 200–300 字
 - [ ] 4 个 `:::judge` 写完后，调用了一次 `synthesize_judges` MCP 合成 4 段语音
-- [ ] **没有调用第二次 show_widget**（播放器卡片已废弃）
+- [ ] **默认没有调用第二次 show_widget**（播放器卡片是可选项，仅在用户明确要 / Linux 等无本机播放环境才补）
 - [ ] 最外层有 `:::script` 的 `:::` 闭标签
 - [ ] `:::script` 闭标签之后没有任何文字输出
 
