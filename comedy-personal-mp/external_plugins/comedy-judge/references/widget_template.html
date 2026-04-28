@@ -1,43 +1,5 @@
-<!--
-  五维评分卡片 widget 模板
-  =============================
-  用途：comedy-judge skill 生成的脱口秀评分可视化卡片
-  调用方式：通过 show_widget 工具传入 widget_code 参数
-  渲染环境：WorkBuddy desktop 的 VisualizerShowWidgetRenderer（裸 HTML 片段内联）
-
-  硬约束（不可违反）：
-  - 必须是裸 HTML 片段，禁止 <html>/<head>/<body>/<script> 外层
-  - 宽度基准 680px，自适应 max-width:100%
-  - 禁止使用 localStorage / sessionStorage
-  - 禁止 position:fixed / position:sticky
-  - 禁止 <form> / <input type="submit">
-  - 所有样式写成内联 style 属性，避免 <style> 标签污染（唯一例外：本模板内的 <style> 仅用关闭 scope 的类名，不会污染全局）
-
-  填空规则（替换 {{...}} 占位符）：
-  - {{SCRIPT_TITLE}}    稿件标题
-  - {{PERFORMER_NAME}}  选手名
-  - {{TAG_LINE}}        梗链一句话（"曹词三 → 吃梨入行 → 押韵训练"），可留空
-  - {{PUNCH_SCORE}}     0-100 整数，5 为步长
-  - {{PUNCH_COMMENT}}   20-40 字评语
-  - {{FLOW_SCORE}} / {{FLOW_COMMENT}}
-  - {{CONNECT_SCORE}} / {{CONNECT_COMMENT}}
-  - {{ORIGINAL_SCORE}} / {{ORIGINAL_COMMENT}}
-  - {{SURPRISE_SCORE}} / {{SURPRISE_COMMENT}}
-  - {{TOTAL_SCORE}}     五项之和
-  - {{TOTAL_COMMENT}}   一句话总评
-
-  色值（已锁定，禁止随意修改）：
-  - 背景主色：#0F0F14（深夜剧场黑）
-  - 次级背景：#1A1A24
-  - 文本主：#FFFFFF
-  - 文本次：#8A8A9A
-  - 进度条轨道：#2A2A38
-  - 总分主色：#A78BFA（统一紫，与人设色解耦，因卡片是客观评分）
--->
-
 <div style="width:100%;max-width:680px;box-sizing:border-box;background:linear-gradient(180deg,#14141C 0%,#0F0F14 100%);border-radius:16px;padding:24px 28px;color:#FFFFFF;font-family:-apple-system,BlinkMacSystemFont,'PingFang SC','Segoe UI',sans-serif;box-shadow:0 8px 32px rgba(0,0,0,0.4);border:1px solid rgba(167,139,250,0.12);">
 
-  <!-- Header：选手 + 稿件 -->
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
     <div style="display:flex;align-items:center;gap:10px;min-width:0;flex:1;">
       <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#A78BFA;box-shadow:0 0 8px rgba(167,139,250,0.6);flex-shrink:0;"></span>
@@ -47,12 +9,8 @@
     <span style="font-size:11px;color:#6A6A7A;letter-spacing:1px;font-weight:500;text-transform:uppercase;flex-shrink:0;margin-left:12px;">SCORING</span>
   </div>
 
-  <!-- Tag line：梗链，可选 -->
   <div style="color:#9A9AAA;font-size:12px;line-height:1.5;margin-bottom:22px;padding-left:18px;">{{TAG_LINE}}</div>
 
-  <!-- 5 根评分条 -->
-
-  <!-- PUNCH -->
   <div style="margin-bottom:14px;">
     <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px;">
       <div style="display:flex;align-items:baseline;gap:8px;">
@@ -67,7 +25,6 @@
     <div style="font-size:11px;color:#8A8A9A;margin-top:5px;line-height:1.4;">{{PUNCH_COMMENT}}</div>
   </div>
 
-  <!-- FLOW -->
   <div style="margin-bottom:14px;">
     <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px;">
       <div style="display:flex;align-items:baseline;gap:8px;">
@@ -82,7 +39,6 @@
     <div style="font-size:11px;color:#8A8A9A;margin-top:5px;line-height:1.4;">{{FLOW_COMMENT}}</div>
   </div>
 
-  <!-- CONNECT -->
   <div style="margin-bottom:14px;">
     <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px;">
       <div style="display:flex;align-items:baseline;gap:8px;">
@@ -97,7 +53,6 @@
     <div style="font-size:11px;color:#8A8A9A;margin-top:5px;line-height:1.4;">{{CONNECT_COMMENT}}</div>
   </div>
 
-  <!-- ORIGINAL -->
   <div style="margin-bottom:14px;">
     <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px;">
       <div style="display:flex;align-items:baseline;gap:8px;">
@@ -112,7 +67,6 @@
     <div style="font-size:11px;color:#8A8A9A;margin-top:5px;line-height:1.4;">{{ORIGINAL_COMMENT}}</div>
   </div>
 
-  <!-- SURPRISE -->
   <div style="margin-bottom:22px;">
     <div style="display:flex;align-items:baseline;justify-content:space-between;margin-bottom:6px;">
       <div style="display:flex;align-items:baseline;gap:8px;">
@@ -127,7 +81,6 @@
     <div style="font-size:11px;color:#8A8A9A;margin-top:5px;line-height:1.4;">{{SURPRISE_COMMENT}}</div>
   </div>
 
-  <!-- 总分区 -->
   <div style="display:flex;align-items:flex-end;justify-content:space-between;padding-top:18px;border-top:1px solid rgba(255,255,255,0.08);">
     <div style="flex:1;min-width:0;padding-right:16px;">
       <div style="font-size:11px;color:#6A6A7A;letter-spacing:1.5px;margin-bottom:4px;text-transform:uppercase;font-weight:600;">Verdict</div>
