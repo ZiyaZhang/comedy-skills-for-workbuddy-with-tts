@@ -127,6 +127,7 @@ WorkBuddy
          │
          └── 同时 (a) afplay/MediaPlayer 本机播放 (b) HTTP server 暴露 URL 给 audio widget
 ```
+prompt：严格按 [SKILL.md](http://SKILL.md) 的 9 步走完： 1) 第一个 artifact 渲染五维评分卡（widget_template.html 替换占位符） 2) 4 段 markdown 点评（按 scholar→veteran→belle→alien 顺序，每段 200-300 字） 3) 调用 mcp__comedy-tts__synthesize_judges 合成 4 段语音 4) 第二个 artifact 渲染播放器卡（audio_widget_template.html，4 个 src 用 dataUrl 不要用 [localhost](http://localhost) url）
 
 ## License
 
