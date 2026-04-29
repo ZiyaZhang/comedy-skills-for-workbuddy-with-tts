@@ -13,6 +13,8 @@ description: "AI领笑员（脱口秀评审官）。当用户提供脱口秀稿�
 2. **四位领笑员的互动点评** — 每人按各自人设给出 200–300 字的现场反应（再给详解）
 3. **4 段语音点评** — 通过 `synthesize_judges` MCP 合成，**在 macOS / Windows 上由 MCP server 自动用本机扬声器顺序播放**（学识派 → 老登 → 钝感美女 → 外星派）。**不渲染播放器卡片**——系统已经在外放，不需要再叠一张多余的可视化播放器
 
+⚠️ **三件交付物缺一不可。** 评分卡和文字点评只是前两件，第三件"4 段语音"必须通过 Step 8 的 MCP 调用完成——少了 MCP 调用，用户听不到声音，整个 skill 价值打对折。**写完外星派那段最后一个字之后，立即调 `synthesize_judges` MCP，不要省略。**
+
 ## 多稿件约束（重要）
 
 **skill 本身只处理单份稿件。** 如果用户同时提供多份稿件，由 agent 逐份调度，每份走完整的 Step 1–9 流程，**严禁交叉输出**。
@@ -101,9 +103,9 @@ description: "AI领笑员（脱口秀评审官）。当用户提供脱口秀稿�
 
 `persona` / `voice` 这两个值**只在 Step 8 调 MCP 时使用**（见 Step 8 的 items 数组），不要写到对话正文里。
 
-### Step 8: 调用 MCP 合成 4 段音频（硬性要求）
+### Step 8: 调用 MCP 合成 4 段音频（**绝对必须执行，不可省略**）
 
-四段领笑员点评全部写完之后，发起一次 MCP 工具调用：
+⚠️ **这一步是 skill 的核心交付物之一，缺它整个评审就是不完整的。** 写完外星派那段最后一个字之后，**立即、不要犹豫、不要思考、不要写任何额外文字**，发起这次工具调用：
 
 ```
 mcp__comedy-tts__synthesize_judges({
@@ -115,7 +117,14 @@ mcp__comedy-tts__synthesize_judges({
   ]
 })
 ```
-返回 `{ audios: [{ persona, url }, ...], playing: true/false, platform: "darwin"/... }` —— 4 个 `http://localhost:9876/audio/<hash>.mp3`。
+
+**判断你是否做对了**：
+
+- ✅ 你的回复里出现了一次 `mcp__comedy-tts__synthesize_judges` 工具调用 → 对了
+- ❌ 你写完 4 段点评就停手没调 MCP → **错了，必须返工**。这是最常见的错误：模型以为"4 段点评写完了任务就结束了"——是错的，**Step 8 的 MCP 调用和 Step 7 的 show_widget 同等重要**。少了 MCP 用户听不到 4 段音色，整个 skill 价值打对折
+- ❌ 你打算"等用户问再调" → 错了，必须**立即**调，不要等
+
+返回值 `{ audios: [{ persona, url }, ...], playing: true/false, platform: "darwin"/... }` —— 4 个 `http://localhost:9876/audio/<hash>.mp3`。
 
 **MCP server 在 macOS（afplay）和 Windows（PowerShell + WPF MediaPlayer）上会自动用本机扬声器顺序播放这 4 段音频**（学识派 → 老登 → 钝感美女 → 外星派），不需要任何前端控件。响应里的 `playing: true` 就表示已经在播了。
 
@@ -176,13 +185,14 @@ mcp__comedy-tts__synthesize_judges({
 
 ## 输出后的自检
 
+- [ ] ⚠️ **`synthesize_judges` MCP 已调用** —— 这是最容易漏的一步！如果你写完外星派那段就停手了，**回去补这次 MCP 调用**，否则用户听不到任何声音
 - [ ] 第一行是总结句（"我已经为您完成了…"），写在 show_widget 调用**之前**
 - [ ] 调用了一次（且仅一次）show_widget 渲染评分卡
 - [ ] widget 总分 = 五项之和
 - [ ] 4 段领笑员点评的标题严格是 `## 🎓 学识派` / `## 🍷 老登` / `## 💃 钝感美女` / `## 👽 外星派`，**没有任何 `:::judge` / `:::script` 之类的 directive**
 - [ ] 4 段点评顺序：scholar → veteran → belle → alien
 - [ ] 每段点评字数控制在 200–300 字
-- [ ] 4 段点评全部写完后，调用了一次 `synthesize_judges` MCP（items 数组里的 voice 顺序：`scholar-calm` / `veteran-rough` / `belle-vivid` / `alien-curious`）
+- [ ] `synthesize_judges` MCP items 数组里 voice 顺序：`scholar-calm` / `veteran-rough` / `belle-vivid` / `alien-curious`
 - [ ] **没有调用第二次 show_widget**（播放器卡片不渲染）
 - [ ] synthesize_judges 调完后没有再追加任何文字
 
